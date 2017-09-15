@@ -3,10 +3,86 @@ package disco
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 // MaxDatagramSize sets the maximum amount of bytes to be read
 var MaxDatagramSize = 8192
+
+type srvc struct {
+	name    string
+	srcAddr string
+}
+
+func (s srvc) String() string {
+	return fmt.Sprintf("srvc;%s;%s", s.srcAddr, s.name)
+}
+
+func newSRVC(msg string) (srvc, error) {
+	ss := strings.Split(msg, ";")
+
+	if len(ss) != 3 || ss[0] != "srvc" {
+		return srvc{}, fmt.Errorf("missing protocol declaration")
+	}
+
+	if ss[1] == "" || ss[2] == "" {
+		return srvc{}, fmt.Errorf("missing address or name")
+	}
+
+	return srvc{srcAddr: ss[1], name: ss[2]}, nil
+
+}
+
+// Announce sends out an announcement on the mAddr
+// that other clients can listen to. ListenFor can interpret
+// these srvc messages
+func Announce(mAddr, srcAddr, name string) error {
+	return Broadcast(mAddr, srvc{name: name, srcAddr: srcAddr}.String())
+}
+
+// ListenFor returns a channel that sends a message if any of the
+// names that was requested was pinged on the multicast addr. Once
+// pinged, the name itself will be returned and then removed from the
+// watchlist
+func ListenFor(addr string, names ...string) (<-chan string, error) {
+	recv, err := Subscribe(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	send := make(chan string)
+	go listenfor(recv, send, names)
+
+	return send, nil
+}
+
+func listenfor(recv <-chan MulticastMsg, send chan<- string, names []string) {
+	mapping := make(map[string]bool)
+
+	for _, name := range names {
+		mapping[name] = true
+	}
+
+	for {
+		msg := <-recv
+		srvc, err := newSRVC(msg.Message)
+		if err != nil {
+			continue
+		}
+
+		for name := range mapping {
+			if srvc.name == name {
+				send <- name
+				delete(mapping, name)
+			}
+		}
+
+		if len(mapping) == 0 {
+			close(send)
+			return
+		}
+	}
+}
 
 // Broadcast sends a message to the multicast address
 // via UDP. The address should be in an "ipaddr:port" fashion
