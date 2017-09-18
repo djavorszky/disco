@@ -45,9 +45,9 @@ func Announce(mAddr, srcAddr, name string) error {
 }
 
 // ListenFor returns a channel that sends a message if any of the
-// names that was requested was pinged on the multicast addr. Once
-// pinged, the name itself will be returned and then removed from the
-// watchlist
+// names that was requested has announced itself on the multicast
+// addr. Once announced, the name itself will be returned and then
+// removed from the watchlist
 func ListenFor(addr string, names ...string) (<-chan string, error) {
 	recv, err := Subscribe(addr)
 	if err != nil {
