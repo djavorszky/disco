@@ -14,7 +14,7 @@ var MaxDatagramSize = 8192
 const (
 	TypeAnnounce = "announce"
 	TypeQuery    = "query"
-	TypeResponse = "rsvp"
+	TypeResponse = "response"
 )
 
 type srvc struct {

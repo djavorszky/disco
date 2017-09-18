@@ -22,6 +22,7 @@ func Test_srvc_String(t *testing.T) {
 	}{
 		{"Valid announce", fields{typ: TypeAnnounce, srcAddr: "192.168.0.1:1234", name: "hello"}, "srvc;announce;192.168.0.1:1234;hello"},
 		{"Valid query", fields{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: "hello"}, "srvc;query;192.168.0.1:1234;hello"},
+		{"Valid response", fields{typ: TypeResponse, srcAddr: "192.168.0.1:1234", name: "hello"}, "srvc;response;192.168.0.1:1234;hello"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -49,7 +50,7 @@ func Test_srvcFrom(t *testing.T) {
 	}{
 		{"Valid Announce", args{"srvc;announce;192.168.0.1:1234;hello"}, srvc{typ: TypeAnnounce, srcAddr: "192.168.0.1:1234", name: "hello"}, false},
 		{"Valid Query", args{"srvc;query;192.168.0.1:1234;somename"}, srvc{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
-		{"Valid RSVP", args{"srvc;rsvp;192.168.0.1:1234;somename"}, srvc{typ: TypeResponse, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
+		{"Valid Response", args{"srvc;response;192.168.0.1:1234;somename"}, srvc{typ: TypeResponse, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
 
 		{"Missing Protocol", args{"query;192.168.0.1:1234;hello"}, srvc{}, true},
 		{"Missing Protocol with semicolon", args{";query;192.168.0.1:1234;hello"}, srvc{}, true},
