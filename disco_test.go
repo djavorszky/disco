@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const waitTime = 300 * time.Millisecond
+const waitTime = 100 * time.Millisecond
 
 func Test_srvc_String(t *testing.T) {
 	type fields struct {
