@@ -37,6 +37,10 @@ func newSRVC(msg string) (srvc, error) {
 // that other clients can listen to. ListenFor can interpret
 // these srvc messages
 func Announce(mAddr, srcAddr, name string) error {
+	if name == "" {
+		return fmt.Errorf("announce: empty name is not valid")
+	}
+
 	return Broadcast(mAddr, srvc{name: name, srcAddr: srcAddr}.String())
 }
 
@@ -70,11 +74,9 @@ func listenfor(recv <-chan MulticastMsg, send chan<- string, names []string) {
 			continue
 		}
 
-		for name := range mapping {
-			if srvc.name == name {
-				send <- name
-				delete(mapping, name)
-			}
+		if _, ok := mapping[srvc.name]; ok {
+			send <- srvc.name
+			delete(mapping, srvc.name)
 		}
 
 		if len(mapping) == 0 {
