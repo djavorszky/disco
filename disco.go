@@ -9,27 +9,34 @@ import (
 // MaxDatagramSize sets the maximum amount of bytes to be read
 var MaxDatagramSize = 8192
 
+// Constants that denote the different types of service messages
+const (
+	TypeAnnounce = "announce"
+	TypeQuery    = "query"
+)
+
 type srvc struct {
-	name    string
+	typ     string
 	srcAddr string
+	name    string
 }
 
 func (s srvc) String() string {
-	return fmt.Sprintf("srvc;%s;%s", s.srcAddr, s.name)
+	return fmt.Sprintf("srvc;%s;%s;%s", s.typ, s.srcAddr, s.name)
 }
 
-func newSRVC(msg string) (srvc, error) {
+func srvcFrom(msg string) (srvc, error) {
 	ss := strings.Split(msg, ";")
 
-	if len(ss) != 3 || ss[0] != "srvc" {
+	if len(ss) != 4 || ss[0] != "srvc" {
 		return srvc{}, fmt.Errorf("missing protocol declaration")
 	}
 
-	if ss[1] == "" || ss[2] == "" {
-		return srvc{}, fmt.Errorf("missing address or name")
+	if ss[1] == "" || ss[2] == "" || ss[3] == "" {
+		return srvc{}, fmt.Errorf("missing query type, address or name")
 	}
 
-	return srvc{srcAddr: ss[1], name: ss[2]}, nil
+	return srvc{typ: ss[1], srcAddr: ss[2], name: ss[3]}, nil
 
 }
 
@@ -41,7 +48,7 @@ func Announce(mAddr, srcAddr, name string) error {
 		return fmt.Errorf("announce: empty name is not valid")
 	}
 
-	return Broadcast(mAddr, srvc{name: name, srcAddr: srcAddr}.String())
+	return Broadcast(mAddr, srvc{typ: TypeAnnounce, name: name, srcAddr: srcAddr}.String())
 }
 
 // ListenFor returns a channel that sends a message if any of the
@@ -69,7 +76,7 @@ func listenfor(recv <-chan MulticastMsg, send chan<- string, names []string) {
 
 	for {
 		msg := <-recv
-		srvc, err := newSRVC(msg.Message)
+		srvc, err := srvcFrom(msg.Message)
 		if err != nil {
 			continue
 		}

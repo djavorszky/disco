@@ -3,64 +3,80 @@ package disco
 import (
 	"net"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
 
 const waitTime = 300 * time.Millisecond
 
-func TestSRVCToString(t *testing.T) {
+func Test_srvc_String(t *testing.T) {
+	type fields struct {
+		typ     string
+		srcAddr string
+		name    string
+	}
 	tests := []struct {
-		have srvc
-		want string
+		name   string
+		fields fields
+		want   string
 	}{
-		{srvc{srcAddr: "192.168.221.1:1234", name: "hello"}, "srvc;192.168.221.1:1234;hello"},
-		{srvc{srcAddr: "1.1.1.1:4321", name: "rlog"}, "srvc;1.1.1.1:4321;rlog"},
+		{"Valid announce", fields{typ: TypeAnnounce, srcAddr: "192.168.0.1:1234", name: "hello"}, "srvc;announce;192.168.0.1:1234;hello"},
+		{"Valid query", fields{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: "hello"}, "srvc;query;192.168.0.1:1234;hello"},
 	}
-
-	for _, test := range tests {
-		if test.have.String() != test.want {
-			t.Errorf("stringer failed. Wanted %q, got %q", test.want, test.have.String())
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := srvc{
+				typ:     tt.fields.typ,
+				srcAddr: tt.fields.srcAddr,
+				name:    tt.fields.name,
+			}
+			if got := s.String(); got != tt.want {
+				t.Errorf("srvc.String() = %v, want %v", got, tt.want)
+			}
+		})
 	}
-
 }
 
-func TestStringToSRVC(t *testing.T) {
-	tests := []struct {
-		str   []string
-		want  srvc
-		exErr bool
-	}{
-		{[]string{"srvc", "192.168.211.88:1234", "hello"}, srvc{srcAddr: "192.168.211.88:1234", name: "hello"}, false},
-		{[]string{"srvc", "1.1.1.1:1234", "rlog"}, srvc{srcAddr: "1.1.1.1:1234", name: "rlog"}, false},
-		{[]string{"srvc", "", ""}, srvc{}, true},
-		{[]string{"srvc", "192.168.211.1:4569", ""}, srvc{}, true},
-		{[]string{"srvc", "", "something"}, srvc{}, true},
-		{[]string{"", "192.168.221.1:1234", "hello"}, srvc{}, true},
-		{[]string{"192.168.221.1:1234", "hello"}, srvc{}, true},
-		{[]string{"asd", "srvc", "192.168.221.1:1234", "hello"}, srvc{}, true},
-		{[]string{"asd", "srvc", "192.168.221.1:1234"}, srvc{}, true},
+func Test_srvcFrom(t *testing.T) {
+	type args struct {
+		msg string
 	}
+	tests := []struct {
+		name    string
+		args    args
+		want    srvc
+		wantErr bool
+	}{
+		{"Valid Announce", args{"srvc;announce;192.168.0.1:1234;hello"}, srvc{typ: TypeAnnounce, srcAddr: "192.168.0.1:1234", name: "hello"}, false},
+		{"Valid Query", args{"srvc;query;192.168.0.1:1234;somename"}, srvc{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
 
-	for _, test := range tests {
-		testString := strings.Join(test.str, ";")
-		srvc, err := newSRVC(testString)
-		if err != nil {
-			if test.exErr {
-				continue // We're expecting an error, so it's good.
+		{"Missing Protocol", args{"query;192.168.0.1:1234;hello"}, srvc{}, true},
+		{"Missing Protocol with semicolon", args{";query;192.168.0.1:1234;hello"}, srvc{}, true},
+		{"Missing Type", args{"srvc;192.168.0.1:1234;hello"}, srvc{}, true},
+		{"Missing Type with semicolon", args{"srvc;;192.168.0.1:1234;hello"}, srvc{}, true},
+
+		{"Missing Address", args{"srvc;announce;hello"}, srvc{}, true},
+		{"Missing Address with semicolon", args{"srvc;announce;;hello"}, srvc{}, true},
+
+		{"Missing Name", args{"srvc;192.168.0.1:1234;announce"}, srvc{}, true},
+		{"Missing Name with semicolon", args{"srvc;announce;192.168.0.1:1234;"}, srvc{}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := srvcFrom(tt.args.msg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("srvcFrom() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
-			t.Errorf("newSRVC(%q) error'd: %v", test.str, err)
-		}
 
-		if srvc.srcAddr != test.want.srcAddr {
-			t.Errorf("newSRVC(%q) address mismatch, got %q", testString, srvc.srcAddr)
-		}
+			if tt.wantErr {
+				return
+			}
 
-		if srvc.name != test.want.name {
-			t.Errorf("newSRVC(%q) name mismatch, got %q", testString, srvc.name)
-		}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("srvcFrom() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -174,7 +190,7 @@ func TestAnnounce(t *testing.T) {
 
 			msg := <-c
 
-			srvc, _ := newSRVC(msg.Message)
+			srvc, _ := srvcFrom(msg.Message)
 
 			if srvc.name != tt.args.name {
 				t.Errorf("Announced name %q, got %q", tt.args.name, srvc.name)
