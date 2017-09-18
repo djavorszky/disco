@@ -49,6 +49,7 @@ func Test_srvcFrom(t *testing.T) {
 	}{
 		{"Valid Announce", args{"srvc;announce;192.168.0.1:1234;hello"}, srvc{typ: TypeAnnounce, srcAddr: "192.168.0.1:1234", name: "hello"}, false},
 		{"Valid Query", args{"srvc;query;192.168.0.1:1234;somename"}, srvc{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
+		{"Valid RSVP", args{"srvc;rsvp;192.168.0.1:1234;somename"}, srvc{typ: TypeResponse, srcAddr: "192.168.0.1:1234", name: "somename"}, false},
 
 		{"Missing Protocol", args{"query;192.168.0.1:1234;hello"}, srvc{}, true},
 		{"Missing Protocol with semicolon", args{";query;192.168.0.1:1234;hello"}, srvc{}, true},
@@ -190,15 +191,43 @@ func TestAnnounce(t *testing.T) {
 
 			msg := <-c
 
-			srvc, _ := srvcFrom(msg.Message)
+			service, _ := srvcFrom(msg.Message)
 
-			if srvc.name != tt.args.name {
-				t.Errorf("Announced name %q, got %q", tt.args.name, srvc.name)
+			if service.name != tt.args.name {
+				t.Errorf("Announced name %q, got %q", tt.args.name, service.name)
 				return
 			}
 
-			if srvc.srcAddr != tt.args.srcAddr {
-				t.Errorf("Announced srcAddr %q, got %q", tt.args.srcAddr, srvc.srcAddr)
+			if service.srcAddr != tt.args.srcAddr {
+				t.Errorf("Announced srcAddr %q, got %q", tt.args.srcAddr, service.srcAddr)
+				return
+			}
+
+			go func() {
+				time.Sleep(waitTime)
+				Broadcast(tt.args.mAddr, srvc{typ: TypeQuery, srcAddr: "192.168.0.1:1234", name: tt.args.name}.String())
+			}()
+
+			// Catch and discard the broadcast
+			<-c
+
+			// Catch the response
+			msg = <-c
+
+			service, _ = srvcFrom(msg.Message)
+
+			if service.typ != TypeResponse {
+				t.Errorf("Service did not respond to query")
+				return
+			}
+
+			if service.name != tt.args.name {
+				t.Errorf("Response name %q, got %q", tt.args.name, service.name)
+				return
+			}
+
+			if service.srcAddr != tt.args.srcAddr {
+				t.Errorf("Response srcAddr %q, got %q", tt.args.srcAddr, service.srcAddr)
 				return
 			}
 		})

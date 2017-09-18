@@ -2,6 +2,7 @@ package disco
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strings"
 )
@@ -13,6 +14,7 @@ var MaxDatagramSize = 8192
 const (
 	TypeAnnounce = "announce"
 	TypeQuery    = "query"
+	TypeResponse = "rsvp"
 )
 
 type srvc struct {
@@ -48,7 +50,31 @@ func Announce(mAddr, srcAddr, name string) error {
 		return fmt.Errorf("announce: empty name is not valid")
 	}
 
+	go rsvpToQueries(mAddr, srcAddr, name)
+
 	return Broadcast(mAddr, srvc{typ: TypeAnnounce, name: name, srcAddr: srcAddr}.String())
+}
+
+func rsvpToQueries(mAddr, srcAddr, name string) {
+	msgs, err := Subscribe(mAddr)
+	if err != nil {
+		log.Printf("Failed to subscribe to %q: %v", mAddr, err)
+	}
+
+	for {
+		msg := <-msgs
+		service, err := srvcFrom(msg.Message)
+		if err != nil {
+			continue
+		}
+
+		if service.typ == TypeQuery && service.name == name {
+			err = Broadcast(mAddr, srvc{typ: TypeResponse, srcAddr: srcAddr, name: name}.String())
+			if err != nil {
+				log.Printf("Failed to respond to to query: %v", err)
+			}
+		}
+	}
 }
 
 // ListenFor returns a channel that sends a message if any of the
