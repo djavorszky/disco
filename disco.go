@@ -109,7 +109,6 @@ func Broadcast(addr, message string) error {
 // about the sender as well, or an error if any arose.
 type MulticastMsg struct {
 	Message string
-	Length  int
 	Src     string
 	Err     error
 }
@@ -156,7 +155,6 @@ func listen(addr *net.UDPAddr, c chan MulticastMsg) {
 
 		c <- MulticastMsg{
 			Message: string(msg[:n]),
-			Length:  n,
 			Src:     fmt.Sprintf("%s:%d", src.IP, src.Port),
 		}
 	}
