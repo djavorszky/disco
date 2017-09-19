@@ -13,9 +13,19 @@ var MaxDatagramSize = 8192
 
 // Constants that denote the different types of service messages
 const (
+	// TypeAnnounce should be used to announce presence
 	TypeAnnounce = "announce"
-	TypeQuery    = "query"
+
+	// TypeQuery should be used to ask whether a service with a
+	// specific name is present
+	TypeQuery = "query"
+
+	// Response should be used to respond to TypeQuery messages
 	TypeResponse = "response"
+
+	// Report should be used to ask everyone on the network to
+	// report that they are alive
+	TypeReport = "report"
 )
 
 // Service represence a name-ipaddress:port combination
@@ -57,12 +67,12 @@ func Announce(mAddr, srcAddr, name string) error {
 		return fmt.Errorf("announce: empty name is not valid")
 	}
 
-	go rsvpToQueries(mAddr, srcAddr, name)
+	go respondToQueries(mAddr, srcAddr, name)
 
 	return Broadcast(mAddr, srvc{typ: TypeAnnounce, name: name, srcAddr: srcAddr}.String())
 }
 
-func rsvpToQueries(mAddr, srcAddr, name string) {
+func respondToQueries(mAddr, srcAddr, name string) {
 	msgs, err := Subscribe(mAddr)
 	if err != nil {
 		log.Printf("Failed to subscribe to %q: %v", mAddr, err)
@@ -75,10 +85,10 @@ func rsvpToQueries(mAddr, srcAddr, name string) {
 			continue
 		}
 
-		if service.typ == TypeQuery && service.name == name {
-			err = Broadcast(mAddr, srvc{typ: TypeResponse, srcAddr: srcAddr, name: name}.String())
+		if service.typ == TypeReport || (service.typ == TypeQuery && service.name == name) {
+			err = Respond(mAddr, srcAddr, name)
 			if err != nil {
-				log.Printf("Failed to respond to to query: %v", err)
+				log.Printf("respondToQueries: %v", err)
 			}
 		}
 	}
@@ -107,6 +117,16 @@ func Query(mAddr, srcAddr, name string, timeout time.Duration) (Service, error) 
 	case <-wait:
 		return Service{}, fmt.Errorf("RESPONSE_TIMEOUT")
 	}
+}
+
+// Respond sends a response type broadcast
+func Respond(mAddr, srcAddr, name string) error {
+	err := Broadcast(mAddr, srvc{typ: TypeResponse, srcAddr: srcAddr, name: name}.String())
+	if err != nil {
+		return fmt.Errorf("response: %v", err)
+	}
+
+	return nil
 }
 
 // ListenFor returns a channel that sends a message if any of the
