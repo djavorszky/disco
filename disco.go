@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 )
 
 // MaxDatagramSize sets the maximum amount of bytes to be read
@@ -16,6 +17,12 @@ const (
 	TypeQuery    = "query"
 	TypeResponse = "response"
 )
+
+// Service represence a name-ipaddress:port combination
+type Service struct {
+	Name string
+	Addr string
+}
 
 type srvc struct {
 	typ     string
@@ -77,23 +84,48 @@ func rsvpToQueries(mAddr, srcAddr, name string) {
 	}
 }
 
+// Query sends out a query type broadcast and waits up until timeout
+// for a response.
+func Query(mAddr, srcAddr, name string, timeout time.Duration) (Service, error) {
+	query := srvc{typ: TypeQuery, srcAddr: srcAddr, name: name}
+
+	wait := time.After(timeout)
+
+	c, err := ListenFor(mAddr, name)
+	if err != nil {
+		return Service{}, fmt.Errorf("listenfor: %v", err)
+	}
+
+	err = Broadcast(mAddr, query.String())
+	if err != nil {
+		return Service{}, fmt.Errorf("query: %v", err)
+	}
+
+	select {
+	case found := <-c:
+		return found, nil
+	case <-wait:
+		return Service{}, fmt.Errorf("RESPONSE_TIMEOUT")
+	}
+}
+
 // ListenFor returns a channel that sends a message if any of the
 // names that was requested has announced itself on the multicast
-// addr. Once announced, the name itself will be returned and then
+// addr. Once announced, the whole message will be returned and then
 // removed from the watchlist
-func ListenFor(addr string, names ...string) (<-chan string, error) {
+func ListenFor(addr string, names ...string) (<-chan Service, error) {
 	recv, err := Subscribe(addr)
 	if err != nil {
 		return nil, err
 	}
 
-	send := make(chan string)
+	send := make(chan Service)
 	go listenfor(recv, send, names)
 
 	return send, nil
 }
 
-func listenfor(recv <-chan MulticastMsg, send chan<- string, names []string) {
+func listenfor(recv <-chan MulticastMsg, send chan<- Service, names []string) {
 	mapping := make(map[string]bool)
 
 	for _, name := range names {
@@ -108,7 +140,7 @@ func listenfor(recv <-chan MulticastMsg, send chan<- string, names []string) {
 		}
 
 		if _, ok := mapping[srvc.name]; ok {
-			send <- srvc.name
+			send <- Service{Name: srvc.name, Addr: srvc.srcAddr}
 			delete(mapping, srvc.name)
 		}
 

@@ -270,14 +270,14 @@ func TestListenFor(t *testing.T) {
 			}()
 
 			for range tt.args.names {
-				name := <-got
+				service := <-got
 
-				if _, ok := tt.want[name]; !ok {
-					t.Errorf("Received non-existing value: %q", name)
+				if _, ok := tt.want[service.Name]; !ok {
+					t.Errorf("Received non-existing value: %q", service.Name)
 					return
 				}
 
-				delete(tt.want, name)
+				delete(tt.want, service.Name)
 			}
 
 			if len(tt.want) != 0 {
