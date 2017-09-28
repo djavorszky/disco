@@ -99,6 +99,9 @@ func respondToQueries(mAddr, srcAddr, name string) {
 func Query(mAddr, srcAddr, name string, timeout time.Duration) (Service, error) {
 	query := srvc{typ: TypeQuery, srcAddr: srcAddr, name: name}
 
+	retry := time.NewTicker(500 * time.Millisecond)
+	defer retry.Stop()
+
 	wait := time.After(timeout)
 
 	c, err := ListenFor(mAddr, name)
@@ -110,6 +113,12 @@ func Query(mAddr, srcAddr, name string, timeout time.Duration) (Service, error) 
 	if err != nil {
 		return Service{}, fmt.Errorf("query: %v", err)
 	}
+
+	go func() {
+		for range retry.C {
+			Broadcast(mAddr, query.String())
+		}
+	}()
 
 	select {
 	case found := <-c:
@@ -156,6 +165,10 @@ func listenfor(recv <-chan MulticastMsg, send chan<- Service, names []string) {
 		msg := <-recv
 		srvc, err := srvcFrom(msg.Message)
 		if err != nil {
+			continue
+		}
+
+		if srvc.typ != TypeAnnounce {
 			continue
 		}
 
